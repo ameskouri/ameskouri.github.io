@@ -79,7 +79,7 @@ p { text-wrap: pretty; }
 }
 
 /* ---------- hero: black name on the white flow ---------- */
-.hero { position: relative; isolation: isolate; min-height: 100svh; display: flex; flex-direction: column; padding: 33svh var(--margin) 40px; overflow: hidden; background: var(--paper); color: var(--paper-ink); }
+.hero { position: relative; isolation: isolate; min-height: 86svh; display: flex; flex-direction: column; padding: 27svh var(--margin) 40px; overflow: hidden; background: var(--paper); color: var(--paper-ink); }
 .hero-flow { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; display: block; background: var(--paper); opacity: 0; transition: opacity 1400ms ease; }
 .hero-flow.is-live { opacity: 1; }
 .name { white-space: nowrap; }
@@ -95,7 +95,7 @@ p { text-wrap: pretty; }
 }
 @media (max-width: 899px) {
   .name { white-space: normal; }
-  .hero { padding-top: 29svh; }
+  .hero { padding-top: 24svh; }
 }
 
 /* ---------- background: the headshot beside two sentences ---------- */
@@ -123,13 +123,14 @@ p { text-wrap: pretty; }
 .entry-title + p { margin-top: 12px; }
 .entry > p + p { margin-top: 12px; }
 .entry-links { display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 20px; }
-/* the Harvard dataset: every data point as one dot, with the running count beneath. The volume sits on the
-   page itself; the flat fallback keeps its pale ground. */
-.dataset-fig { margin-top: 28px; }
-.dataset { display: block; width: 100%; height: auto; aspect-ratio: 2400 / 1170; background: var(--surface); }
-.dataset.is-depth { aspect-ratio: 16 / 10; background: var(--bg); }
-.dataset-fig figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-top: 16px; }
-.dataset-total { font-family: var(--font-display); font-size: var(--step-head); font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+/* the Harvard dataset: every data point as one dot on a spiral, the total beside it */
+.dataset-fig { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 36px; }
+.dataset { display: block; width: 100%; max-width: 460px; height: auto; aspect-ratio: 1; }
+.dataset-total { display: block; font-family: var(--font-display); font-size: var(--step-head); font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.dataset-note { display: block; max-width: 26em; margin-top: 12px; font-size: var(--step-small); color: var(--muted); }
+@media (min-width: 1100px) {
+  .dataset-fig { grid-template-columns: minmax(0, 460px) minmax(0, 1fr); gap: 48px; align-items: center; }
+}
 
 /* figures: the number large, its label under it */
 .figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 36px 0 10px; }

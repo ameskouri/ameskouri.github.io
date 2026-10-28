@@ -93,7 +93,7 @@ float fbm(vec2 p) {
 }
 void main() {
   vec2 uv = gl_FragCoord.xy / res.y * ZOOM + lean * 0.18;
-  float t = time * 0.11;
+  float t = time * 0.07;
   vec2 q = vec2(fbm(uv + vec2(0.0, t)), fbm(uv + vec2(5.2, 1.3) - t));
   vec2 r = vec2(fbm(uv + 2.3 * q + vec2(1.7, 9.2) + 0.6 * t), fbm(uv + 2.3 * q + vec2(8.3, 2.8) - 0.5 * t));
   float f = fbm(uv + 2.4 * r + lean * 0.12);
@@ -101,7 +101,7 @@ void main() {
   float k = clamp((f - 0.24) / 0.46, 0.0, 1.0);
   vec3 col = mix(vec3(0.975, 0.98, 0.99), vec3(0.88, 0.9, 0.94), smoothstep(0.0, 0.38, k));
   col = mix(col, vec3(0.72, 0.77, 0.86), smoothstep(0.32, 0.68, k + 0.15 * (r.x - 0.5)));
-  col = mix(col, vec3(0.53, 0.62, 0.8), smoothstep(0.6, 0.95, k + 0.18 * (q.y - 0.5)) * 0.75);
+  col = mix(col, vec3(0.53, 0.62, 0.8), smoothstep(0.6, 0.95, k + 0.18 * (q.y - 0.5)) * 0.5);
   // light the folds like pearl satin: a surface normal from the slope of the field, lit from the upper left
 #ifdef GL_OES_standard_derivatives
   vec2 g = vec2(dFdx(f), dFdy(f)) * res.y / ZOOM;
@@ -109,8 +109,8 @@ void main() {
   vec3 l = normalize(vec3(-0.5, 0.6, 0.62));
   float diffuse = clamp(dot(n, l), 0.0, 1.0);
   float spec = pow(clamp(dot(n, normalize(l + vec3(0.0, 0.0, 1.0))), 0.0, 1.0), 28.0);
-  col *= 0.74 + 0.36 * diffuse;
-  col += vec3(1.0) * spec * 0.35;
+  col *= 0.8 + 0.26 * diffuse;
+  col += vec3(1.0) * spec * 0.22;
 #endif
   col = min(col, vec3(1.0));
   vec2 s = gl_FragCoord.xy / res;
@@ -142,162 +142,62 @@ void main() {
   if (!calm) whileVisible(canvas, draw);
 })();
 
-// The dataset, flat: every data point as one pixel in 14 bands (variables) by 53 columns (years), dissolving
-// into place while the count runs up. Only drawn where WebGL2 is missing; the volume below is the usual view.
-const flatDataset = (canvas, count) => {
-  const note = document.getElementById('dataset-note');
-  if (note) note.textContent = 'data points. Each dot is one of them, arranged in 14 bands for the variables and 53 columns for the years.';
-  const TOTAL = 2806605, W = 2400, H = Math.ceil(TOTAL / W), PLAY_MS = 6500;
-  const rgba = (r, g, b) => ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;   // ImageData pixels are little-endian RGBA
-  const EMPTY = rgba(238, 241, 246), PAGE = rgba(255, 255, 255);
-  const TONES = [rgba(47, 111, 224), rgba(120, 170, 250)], SPECK = rgba(10, 13, 20);
-  const inkFor = (i) => {
-    if ((Math.imul(i, 2654435761) >>> 28) === 0) return SPECK;
-    const band = Math.floor(Math.floor(i / W) * 14 / H), year = Math.floor((i % W) * 53 / W);
-    return TONES[(band + year) & 1];
-  };
-  let ctx, img, px, order, lit = 0;
-  const prepare = () => {
-    canvas.width = W; canvas.height = H;
-    ctx = canvas.getContext('2d');
-    img = ctx.createImageData(W, H); px = new Uint32Array(img.data.buffer);
-    px.fill(EMPTY, 0, TOTAL); px.fill(PAGE, TOTAL);
-    // a scattered order in linear time: bucket every dot by a random byte, then walk the buckets
-    let seed = 2463534242;
-    const key = new Uint8Array(TOTAL), starts = new Uint32Array(257);
-    for (let i = 0; i < TOTAL; i++) { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; const k = seed & 255; key[i] = k; starts[k + 1]++; }
-    for (let k = 0; k < 256; k++) starts[k + 1] += starts[k];
-    order = new Uint32Array(TOTAL);
-    for (let i = 0; i < TOTAL; i++) order[starts[key[i]]++] = i;
-  };
-  const lightTo = (n) => {
-    for (; lit < n; lit++) { const i = order[lit]; px[i] = inkFor(i); }
-    ctx.putImageData(img, 0, 0);
-    if (count) count.textContent = n.toLocaleString('en-US');
-  };
-  const play = () => {
-    prepare();
-    if (calm) { lightTo(TOTAL); order = null; return; }
-    const start = performance.now();
-    const tick = (now) => {
-      const t = Math.min(1, (now - start) / PLAY_MS), eased = 1 - Math.pow(1 - t, 3);
-      lightTo(Math.round(TOTAL * eased));
-      if (t < 1) requestAnimationFrame(tick); else order = null;   // release the ordering once every dot is placed
-    };
-    requestAnimationFrame(tick);
-  };
-  const io = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { io.disconnect(); play(); } }, { threshold: 0.3 });
-  io.observe(canvas);
-};
-
-// The dataset as a volume: all 2,806,605 data points in the Harvard database, one GPU point each, stacked in
-// 14 layers (the variables), each 3,981 cities across and 53 years deep. Before it is in view every layer lies
-// folded into one rippling surface. Then a scan crosses the block left to right and, behind it, each dot
-// lifts or drops to its own layer while the count runs up to the total. Afterward the layers keep a slow
-// swell, scrolling tilts the block and the pointer turns it a little. Under reduced motion it is drawn
-// settled and still.
+// The dataset: all 2,806,605 data points in the Harvard database, drawn once as a still image, one dot each.
+// They run along a spiral that makes one turn per year, earliest at the centre and latest at the edge. Each
+// turn is cut into 14 arcs, one per variable, with the cities in order along each arc. Inner turns are
+// shorter, so the same number of dots packs tighter there. The dots are counted into the canvas in slices
+// as the figure nears the screen, so drawing never holds up scrolling.
 (() => {
-  const canvas = document.getElementById('dataset'), count = document.getElementById('dataset-count');
+  const canvas = document.getElementById('dataset');
   if (!canvas || !('IntersectionObserver' in window)) return;
-  const flat = () => { const fresh = canvas.cloneNode(); canvas.replaceWith(fresh); flatDataset(fresh, count); };
-  const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
-  if (!gl) { flatDataset(canvas, count); return; }
-  const TOTAL = 2806605, PLAY_MS = 5000;
-  const SWEEP = 4, JITTER = 0.12;   // the scan front spans a quarter of the block; dots leave it a little out of step
-  const vertex = `#version 300 es
-precision highp float;
-precision highp int;
-uniform float settle;   // the scan's progress, 0 to 1
-uniform float time;
-uniform vec2 turn;      // yaw and pitch, radians
-uniform float aspect;
-uniform float size;
-uniform float ink;      // opacity per dot, scaled to the canvas so the block reads the same at any size
-out vec4 tint;
-const int CITIES = 3981, LAYER = 3981 * 53;
-const float GAPS = 147297.0 / 2806605.0;   // the block has 2,953,902 cells; those without a data point are spread evenly through it
-const float SWEEP = ${SWEEP.toFixed(2)}, JITTER = ${JITTER.toFixed(2)};
-uint scramble(uint x) { x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; return x; }
-void main() {
-  int i = gl_VertexID;
-  int c = i + int(float(i) * GAPS);
-  int layer = c / LAYER, r = c - layer * LAYER, year = r / CITIES, city = r - year * CITIES;
-  float across = float(city) / 3980.0, jitter = float(scramble(uint(i)) >> 8) / 16777216.0;
-  vec3 p = (vec3(across, float(layer) / 13.0, float(year) / 52.0) - 0.5) * vec3(2.4, 1.15, 0.9);
-  // where the scan has passed, the dot moves from the shared surface to its layer
-  float s = clamp(settle * (1.0 + SWEEP + JITTER) - across * SWEEP - jitter * JITTER, 0.0, 1.0);
-  float e = s * s * (3.0 - 2.0 * s);
-  float surface = 0.3 * (0.6 * sin(p.x * 2.4 + p.z * 2.6 + time * 0.8) + 0.25 * sin(p.x * 4.9 - time * 0.6 + 1.3) + 0.3 * cos(p.z * 3.7 + time * 0.45)) + p.y * 0.05;
-  float swell = 0.03 * sin(p.x * 2.8 + time * 0.55 + float(layer) * 0.55) * cos(p.z * 3.0 - time * 0.4);
-  vec3 q = vec3(p.x, mix(surface, p.y + swell, e), p.z);
-  float cy = cos(turn.x), sy = sin(turn.x), cp = cos(turn.y), sp = sin(turn.y);
-  q = vec3(cy * q.x - sy * q.z, q.y, sy * q.x + cy * q.z);     // yaw about the vertical
-  q = vec3(q.x, cp * q.y + sp * q.z, cp * q.z - sp * q.y);     // pitch: the far edge rises, so the layers show from above
-  float w = 3.2 + q.z;
-  gl_Position = vec4(q.x * 2.85 / aspect, q.y * 2.85, 0.0, w);
-  gl_PointSize = size;
-  float near = clamp((4.0 - w) / 1.6, 0.0, 1.0);
-  float front = 4.0 * s * (1.0 - s);                           // dots in flight mark the scan
-  vec3 col = mix(vec3(0.4, 0.56, 0.89), vec3(0.145, 0.349, 0.722), near);
-  col = mix(col, vec3(0.04, 0.05, 0.08), 0.3 * e * float(layer & 1));   // alternate layers a shade deeper once apart
-  col = mix(col, vec3(0.184, 0.435, 0.878), front);
-  tint = vec4(col, min(1.0, ink * (0.55 + 0.45 * near) * (1.0 + 0.8 * front)));
-}`;
-  const fragment = `#version 300 es
-precision mediump float;
-in vec4 tint;
-out vec4 color;
-void main() { color = tint; }`;
-  const prog = glProgram(gl, vertex, fragment);
-  if (!prog) { flat(); return; }
-  gl.useProgram(prog);
-  gl.clearColor(1, 1, 1, 1);
-  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  const u = (name) => gl.getUniformLocation(prog, name);
-  const uSettle = u('settle'), uTime = u('time'), uTurn = u('turn'), uAspect = u('aspect'), uSize = u('size'), uInk = u('ink');
-  const scale = Math.min(2, window.devicePixelRatio || 1);
-  canvas.classList.add('is-depth');
-  const size = () => {
-    fitCanvas(canvas, gl, scale);
-    gl.uniform1f(uAspect, canvas.width / canvas.height);
-    gl.uniform1f(uSize, scale);   // one CSS pixel per dot
-    // dots overlap less on a bigger canvas, so each carries a little more ink there
-    gl.uniform1f(uInk, Math.min(0.4, Math.max(0.03, 0.12 * canvas.clientWidth * canvas.clientHeight / 484000)));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const TOTAL = 2806605, CITIES = 3981, YEARS = 53, VARS = 14, YEAR = CITIES * VARS;
+  const GAPS = 147297 / TOTAL;           // the grid has 2,953,902 cells; those without a data point are spread evenly through it
+  const INNER = 0.2, SPOKE = 0.08;       // the empty middle, as a share of the radius; the gap between arcs, as a share of an arc
+  const STRAND = 0.62;                   // how much of each turn's width the dots fill, leaving a groove between years
+  const TONES = [[47, 111, 224], [16, 38, 96]];   // alternate arcs: cobalt and deep navy
+  let drawnAt = 0, job = 0;
+  const draw = () => {
+    const css = canvas.clientWidth, S = Math.round(css * Math.min(2, window.devicePixelRatio || 1));
+    if (!S) return;
+    const run = ++job;
+    drawnAt = css;
+    const counts = [new Uint16Array(S * S), new Uint16Array(S * S)];
+    const R = S / 2 - 1, r0 = R * INNER, band = (R - r0) / (YEARS + STRAND / 2);   // the outermost strand still fits
+    let seed = 2463534242, i = 0;
+    const slice = () => {
+      if (run !== job) return;   // a resize started a fresh drawing
+      for (const end = Math.min(TOTAL, i + 350000); i < end; i++) {
+        const c = i + Math.floor(i * GAPS);
+        const year = Math.floor(c / YEAR), rest = c - year * YEAR, v = Math.floor(rest / CITIES), k = rest - v * CITIES;
+        const turn = year + (v + SPOKE / 2 + (1 - SPOKE) * (k + 0.5) / CITIES) / VARS;
+        seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+        const r = r0 + band * (turn + STRAND * ((seed >>> 0) / 4294967296 - 0.5)), a = turn * 2 * Math.PI - Math.PI / 2;
+        counts[v & 1][Math.floor(S / 2 + r * Math.sin(a)) * S + Math.floor(S / 2 + r * Math.cos(a))]++;
+      }
+      if (i < TOTAL) { setTimeout(slice, 0); return; }
+      // each dot is a faint mark; where they stack the ink builds up. The mark is lighter on denser buffers
+      // so the figure carries the same weight at any size.
+      const mark = 1 - Math.pow(0.8, (S * S) / 1440000), cover = new Float32Array(2048);
+      for (let n = 0; n < 2048; n++) cover[n] = 1 - Math.pow(1 - mark, n);
+      canvas.width = S; canvas.height = S;
+      const img = ctx.createImageData(S, S), px = new Uint32Array(img.data.buffer), [A, B] = TONES;
+      for (let p = 0; p < S * S; p++) {
+        const na = counts[0][p], nb = counts[1][p], n = na + nb;
+        if (!n) continue;
+        const wa = na / n, wb = nb / n, alpha = Math.round(255 * cover[Math.min(n, 2047)]);
+        px[p] = ((alpha << 24) | (Math.round(A[2] * wa + B[2] * wb) << 16) | (Math.round(A[1] * wa + B[1] * wb) << 8) | Math.round(A[0] * wa + B[0] * wb)) >>> 0;
+      }
+      ctx.putImageData(img, 0, 0);
+    };
+    slice();
   };
-  // the count follows the dots a quarter of the way through their move, so it starts with the scan
-  const placed = (settle) => Math.round(TOTAL * Math.min(1, Math.max(0, (settle * (1 + SWEEP + JITTER) - 0.25 - JITTER / 2) / SWEEP)));
-  const inView = () => { const r = canvas.getBoundingClientRect(); return Math.min(1, Math.max(0, (innerHeight - r.top) / (innerHeight + r.height))); };
-  const lean = { x: 0, y: 0 };
-  let armed = false, begun = 0, shown = -1;
-  const draw = (now) => {
-    lean.x += (pointer.x - lean.x) * 0.05; lean.y += (pointer.y - lean.y) * 0.05;
-    if (armed && !begun) begun = now;   // timed from the first frame actually drawn, so no step is skipped
-    const t = calm ? 1 : begun ? Math.min(1, (now - begun) / PLAY_MS) : 0;
-    const settle = 1 - (1 - t) * (1 - t);   // under way at once, easing into place at the end
-    const secs = calm ? 0 : now / 1000, v = calm ? 0.5 : inView();
-    gl.uniform1f(uSettle, settle);
-    gl.uniform1f(uTime, secs);
-    gl.uniform2f(uTurn, -0.5 + 0.55 * v + 0.1 * Math.sin(secs * 0.13) + lean.x * 0.4, 0.55 - 0.3 * v - lean.y * 0.2);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.drawArrays(gl.POINTS, 0, TOTAL);
-    if (count && begun && !calm) {
-      const n = placed(settle);
-      if (n !== shown) { shown = n; count.textContent = n.toLocaleString('en-US'); }
-    }
-  };
-  size();
-  addEventListener('resize', () => { size(); if (calm) draw(performance.now()); });
-  if (calm) { draw(performance.now()); return; }
-  // draw once now so the GPU has the shader ready before the block scrolls in, and start the count from zero
-  draw(performance.now());
-  if (count) count.textContent = '0';
-  const io = new IntersectionObserver(([entry]) => {
-    if (!entry.isIntersecting) return;
-    io.disconnect();
-    armed = true;
-  }, { threshold: 0.2 });
+  const io = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { io.disconnect(); draw(); } }, { rootMargin: '1200px 0px' });
   io.observe(canvas);
-  whileVisible(canvas, draw);
+  // redraw for a much wider or narrower figure, so it stays sharp
+  let wait = 0;
+  addEventListener('resize', () => { clearTimeout(wait); wait = setTimeout(() => { if (drawnAt && Math.abs(canvas.clientWidth - drawnAt) > drawnAt * 0.2) draw(); }, 250); });
 })();
 
 // Beside the contact rows: a knot of seven threads of light, a three-dimensional Lissajous figure whose phases

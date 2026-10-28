@@ -6,8 +6,9 @@ Plain HTML, CSS and a little JavaScript; no build step.
 
 - `index.html`: all the words and links on the page.
 - `styles.css`: layout, type and colour.
-- `main.js`: the three visuals, all drawn live in the browser: the flow behind the name, the 2,806,605 points
-  of the Harvard database, and the knot of threads beside the contact rows. There are no video files.
+- `main.js`: the three visuals, all drawn in the browser: the flow behind the name, the still spiral of the
+  Harvard database's 2,806,605 points, and the knot of threads beside the contact rows. There are no video
+  files.
 - `assets/`: the headshot and the two affiliation logos.
 
 ## Editing
