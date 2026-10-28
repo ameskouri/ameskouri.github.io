@@ -102,6 +102,7 @@ p { text-wrap: pretty; }
 .about-body { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 32px 48px; align-items: center; max-width: 960px; }
 .portrait { display: block; width: 100%; height: auto; aspect-ratio: 5 / 7; object-fit: cover; background: var(--surface); }
 .about-text { max-width: 30em; }
+.about-text p + p { margin-top: 0.8em; }
 @media (max-width: 699px) { .about-body { grid-template-columns: minmax(0, 1fr); } .portrait { max-width: 280px; } }
 
 /* ---------- work: two lines of introduction, then CV blocks with the label in the margin ---------- */
