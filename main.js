@@ -142,54 +142,79 @@ void main() {
   if (!calm) whileVisible(canvas, draw);
 })();
 
-// The dataset: all 2,806,605 data points in the Harvard database, drawn once as a still image, one dot each.
-// They run along a spiral that makes one turn per year, earliest at the centre and latest at the edge. Each
-// turn is cut into 14 arcs, one per variable, with the cities in order along each arc. Inner turns are
-// shorter, so the same number of dots packs tighter there. The dots are counted into the canvas in slices
-// as the figure nears the screen, so drawing never holds up scrolling.
+// The dataset: all 2,806,605 data points in the Harvard database, drawn once as a still block, one dot each.
+// The block stacks 14 layers, one per variable; each layer runs the 3,981 cities along one floor edge and the
+// 53 years along the other. It is drawn in an even isometric view with dimension lines on its three edges,
+// and the labels in the page are set beside them. The dots are counted into the canvas in slices as the
+// figure nears the screen, so drawing never holds up scrolling.
 (() => {
   const canvas = document.getElementById('dataset');
   if (!canvas || !('IntersectionObserver' in window)) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d'), wrap = canvas.parentElement;
   if (!ctx) return;
-  const TOTAL = 2806605, CITIES = 3981, YEARS = 53, VARS = 14, YEAR = CITIES * VARS;
-  const GAPS = 147297 / TOTAL;           // the grid has 2,953,902 cells; those without a data point are spread evenly through it
-  const INNER = 0.2, SPOKE = 0.08;       // the empty middle, as a share of the radius; the gap between arcs, as a share of an arc
-  const STRAND = 0.62;                   // how much of each turn's width the dots fill, leaving a groove between years
-  const TONES = [[47, 111, 224], [16, 38, 96]];   // alternate arcs: cobalt and deep navy
+  const TOTAL = 2806605, CITIES = 3981, YEARS = 53, VARS = 14, LAYER = CITIES * YEARS;
+  const GAPS = 147297 / TOTAL;            // the grid has 2,953,902 cells; those without a data point are spread evenly through it
+  const SIDE = 0.35, TALL = 0.24, TOP = 0.05, MID = 0.47;   // floor edge, height, space above and centre line, as shares of the canvas width (a little left of centre, leaving room for the side label)
+  const COS = Math.cos(Math.PI / 6), SIN = 0.5;
+  const TONES = [[47, 111, 224], [16, 38, 96]];   // alternate layers: cobalt and deep navy
+  // a point in the block (cities, years, layers, each 0 to 1) to the canvas, in canvas widths
+  const place = (x, z, y) => [MID + (x - z) * COS * SIDE, TOP + TALL + (x + z) * SIN * SIDE - y * TALL];
+  const EDGES = [   // from, to, outward direction; one per label, in the page's order
+    { a: place(0, 1, 0), b: place(1, 1, 0), out: [-SIN, COS] },   // cities
+    { a: place(1, 1, 0), b: place(1, 0, 0), out: [SIN, COS] },    // years
+    { a: place(1, 0, 0), b: place(1, 0, 1), out: [1, 0] },        // variables
+  ];
+  const LINE = 0.03, TICK = 0.008, LABEL = [0.062, 0.062, 0.048];   // how far out the dimension lines and labels sit, in canvas widths
   let drawnAt = 0, job = 0;
   const draw = () => {
-    const css = canvas.clientWidth, S = Math.round(css * Math.min(2, window.devicePixelRatio || 1));
-    if (!S) return;
+    const scale = Math.min(2, window.devicePixelRatio || 1);
+    const W = Math.round(canvas.clientWidth * scale), H = Math.round(canvas.clientHeight * scale);
+    if (!W || !H) return;
     const run = ++job;
-    drawnAt = css;
-    const counts = [new Uint16Array(S * S), new Uint16Array(S * S)];
-    const R = S / 2 - 1, r0 = R * INNER, band = (R - r0) / (YEARS + STRAND / 2);   // the outermost strand still fits
+    drawnAt = canvas.clientWidth;
+    const counts = [new Uint16Array(W * H), new Uint16Array(W * H)];
     let seed = 2463534242, i = 0;
     const slice = () => {
       if (run !== job) return;   // a resize started a fresh drawing
       for (const end = Math.min(TOTAL, i + 350000); i < end; i++) {
         const c = i + Math.floor(i * GAPS);
-        const year = Math.floor(c / YEAR), rest = c - year * YEAR, v = Math.floor(rest / CITIES), k = rest - v * CITIES;
-        const turn = year + (v + SPOKE / 2 + (1 - SPOKE) * (k + 0.5) / CITIES) / VARS;
+        const v = Math.floor(c / LAYER), rest = c - v * LAYER, year = Math.floor(rest / CITIES), city = rest - year * CITIES;
         seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
-        const r = r0 + band * (turn + STRAND * ((seed >>> 0) / 4294967296 - 0.5)), a = turn * 2 * Math.PI - Math.PI / 2;
-        counts[v & 1][Math.floor(S / 2 + r * Math.sin(a)) * S + Math.floor(S / 2 + r * Math.cos(a))]++;
+        // each year is a soft row of cities, so the rows read as texture rather than as hard lines
+        const [u, w] = place((city + 0.5) / CITIES, (year + 0.5 + 0.35 * ((seed >>> 0) / 4294967296 - 0.5)) / YEARS, v / (VARS - 1));
+        counts[v & 1][Math.floor(w * W) * W + Math.floor(u * W)]++;
       }
       if (i < TOTAL) { setTimeout(slice, 0); return; }
       // each dot is a faint mark; where they stack the ink builds up. The mark is lighter on denser buffers
-      // so the figure carries the same weight at any size.
-      const mark = 1 - Math.pow(0.8, (S * S) / 1440000), cover = new Float32Array(2048);
-      for (let n = 0; n < 2048; n++) cover[n] = 1 - Math.pow(1 - mark, n);
-      canvas.width = S; canvas.height = S;
-      const img = ctx.createImageData(S, S), px = new Uint32Array(img.data.buffer), [A, B] = TONES;
-      for (let p = 0; p < S * S; p++) {
+      // so the block carries the same weight at any size.
+      const mark = 1 - Math.pow(0.8, (W * H) / 2200000), cover = new Float32Array(4096);
+      for (let n = 0; n < 4096; n++) cover[n] = 1 - Math.pow(1 - mark, n);
+      canvas.width = W; canvas.height = H;
+      const img = ctx.createImageData(W, H), px = new Uint32Array(img.data.buffer), [A, B] = TONES;
+      for (let p = 0; p < W * H; p++) {
         const na = counts[0][p], nb = counts[1][p], n = na + nb;
         if (!n) continue;
-        const wa = na / n, wb = nb / n, alpha = Math.round(255 * cover[Math.min(n, 2047)]);
+        const wa = na / n, wb = nb / n, alpha = Math.round(255 * cover[Math.min(n, 4095)]);
         px[p] = ((alpha << 24) | (Math.round(A[2] * wa + B[2] * wb) << 16) | (Math.round(A[1] * wa + B[1] * wb) << 8) | Math.round(A[0] * wa + B[0] * wb)) >>> 0;
       }
       ctx.putImageData(img, 0, 0);
+      // dimension lines with end ticks, and the labels set just beyond them
+      ctx.strokeStyle = '#8b93a3'; ctx.lineWidth = scale;
+      const labels = wrap.querySelectorAll('.dataset-label');
+      EDGES.forEach(({ a, b, out }, k) => {
+        const at = (p, d) => [(p[0] + out[0] * d) * W, (p[1] + out[1] * d) * W];
+        ctx.beginPath();
+        ctx.moveTo(...at(a, LINE)); ctx.lineTo(...at(b, LINE));
+        for (const p of [a, b]) { ctx.moveTo(...at(p, LINE - TICK)); ctx.lineTo(...at(p, LINE + TICK)); }
+        ctx.stroke();
+        const label = labels[k];
+        if (label) {
+          const mid = [(a[0] + b[0]) / 2 + out[0] * LABEL[k], (a[1] + b[1]) / 2 + out[1] * LABEL[k]];
+          label.style.left = (mid[0] * 100).toFixed(2) + '%';
+          label.style.top = (mid[1] * 100 * canvas.clientWidth / canvas.clientHeight).toFixed(2) + '%';
+        }
+      });
+      wrap.classList.add('is-drawn');
     };
     slice();
   };

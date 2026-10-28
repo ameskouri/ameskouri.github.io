@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&family=Onest:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261028v">
+  <link rel="stylesheet" href="styles.css?v=20261028x">
 </head>
 <body>
   <main>
@@ -103,8 +103,13 @@
             <p class="entry-meta">2025–present</p>
             <p>With the lab, I'm building a database of American city government that covers 14 variables for 3,981 cities over 53 years. I train and test the models that do the research.</p>
             <figure class="dataset-fig">
-              <canvas class="dataset" id="dataset" aria-hidden="true"></canvas>
-              <figcaption><span class="dataset-total">2,806,605</span> <span class="dataset-note">data points, each drawn as a dot. The spiral turns once for each of the 53 years, starting in the middle, and the 14 wedges are the variables.</span></figcaption>
+              <div class="dataset-wrap">
+                <canvas class="dataset" id="dataset" aria-hidden="true"></canvas>
+                <span class="dataset-label" style="--turn: 30deg">3,981 cities</span>
+                <span class="dataset-label" style="--turn: -30deg">53 years</span>
+                <span class="dataset-label dataset-label-side">14 variables</span>
+              </div>
+              <figcaption><span class="dataset-total">2,806,605</span> <span class="dataset-note">data points, each drawn as a dot.</span></figcaption>
             </figure>
           </article>
 
@@ -155,6 +160,6 @@
     <p class="foot-mark" aria-hidden="true">Adam Meskouri</p>
   </footer>
 
-  <script src="main.js?v=20261028v" defer></script>
+  <script src="main.js?v=20261028w" defer></script>
 </body>
 </html>
