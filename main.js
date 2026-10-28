@@ -58,8 +58,9 @@ const fitCanvas = (canvas, gl, scale) => {
 })();
 
 // The flow: a domain-warped noise field lit like pearl satin, drawn on the GPU behind the name. It leans
-// gently toward the pointer. Rendered at half resolution (it is soft by nature), paused off screen and in
-// hidden tabs, frozen on one frame under reduced motion. Without WebGL the hero keeps its flat ground.
+// gently toward the pointer. Drawn as near the screen's own pixel density as a fixed pixel budget allows,
+// and stepped down on a device that can't keep up; paused off screen and in hidden tabs, frozen on one frame
+// under reduced motion. Without WebGL the hero keeps its flat ground.
 (() => {
   const canvas = document.getElementById('flow');
   if (!canvas) return;
@@ -92,7 +93,8 @@ float fbm(vec2 p) {
   return v;
 }
 void main() {
-  vec2 uv = gl_FragCoord.xy / res.y * ZOOM + lean * 0.18;
+  float unit = min(res.x, res.y);   // the folds keep one size against the shorter side, so a phone shows as many as a laptop
+  vec2 uv = gl_FragCoord.xy / unit * ZOOM + lean * 0.18;
   float t = time * 0.07;
   vec2 q = vec2(fbm(uv + vec2(0.0, t)), fbm(uv + vec2(5.2, 1.3) - t));
   vec2 r = vec2(fbm(uv + 2.3 * q + vec2(1.7, 9.2) + 0.6 * t), fbm(uv + 2.3 * q + vec2(8.3, 2.8) - 0.5 * t));
@@ -104,7 +106,7 @@ void main() {
   col = mix(col, vec3(0.53, 0.62, 0.8), smoothstep(0.6, 0.95, k + 0.18 * (q.y - 0.5)) * 0.5);
   // light the folds like pearl satin: a surface normal from the slope of the field, lit from the upper left
 #ifdef GL_OES_standard_derivatives
-  vec2 g = vec2(dFdx(f), dFdy(f)) * res.y / ZOOM;
+  vec2 g = vec2(dFdx(f), dFdy(f)) * unit / ZOOM;
   vec3 n = normalize(vec3(-g * 0.8, 1.0));
   vec3 l = normalize(vec3(-0.5, 0.6, 0.62));
   float diffuse = clamp(dot(n, l), 0.0, 1.0);
@@ -115,7 +117,7 @@ void main() {
   col = min(col, vec3(1.0));
   vec2 s = gl_FragCoord.xy / res;
   col = mix(col, vec3(0.975, 0.98, 0.99), (1.0 - smoothstep(0.0, 0.6, s.x * 0.55 + s.y * 0.75)) * 0.6);   // lighter lower left, under the sentence
-  col += (hash(gl_FragCoord.xy + time) - 0.5) * 0.018;                                                    // fine grain against banding
+  col += (hash(gl_FragCoord.xy) - 0.5) / 255.0;                                                            // a still, one-step dither against banding
   gl_FragColor = vec4(col, 1.0);
 }`;
   const prog = glProgram(gl, vertex, fragment);
@@ -126,11 +128,33 @@ void main() {
   const loc = gl.getAttribLocation(prog, 'p');
   gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const uRes = gl.getUniformLocation(prog, 'res'), uTime = gl.getUniformLocation(prog, 'time'), uLean = gl.getUniformLocation(prog, 'lean');
-  const size = () => { fitCanvas(canvas, gl, 0.5); gl.uniform2f(uRes, canvas.width, canvas.height); };
+  const BUDGET = 1.5e6;   // pixels drawn per frame at most; the field is soft, so it needs no more
+  let quality = 1;
+  const size = () => {
+    const area = Math.max(1, canvas.clientWidth * canvas.clientHeight);
+    fitCanvas(canvas, gl, Math.max(0.5, Math.min(window.devicePixelRatio || 1, Math.sqrt(BUDGET / area)) * quality));
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+  };
+  // on a device that can't keep up, frames run long: if the typical gap over 90 frames passes 24ms, draw
+  // fewer pixels, at most twice
+  const gaps = [];
+  let last = 0, steps = 0;
+  const pace = (now) => {
+    if (steps < 2 && last && now - last < 200) {   // a longer gap is a pause, not a slow frame
+      gaps.push(now - last);
+      if (gaps.length === 90) {
+        gaps.sort((a, b) => a - b);
+        if (gaps[45] > 24) { quality *= 0.7; steps++; size(); } else steps = 2;
+        gaps.length = 0;
+      }
+    }
+    last = now;
+  };
   // the pull eases so the surface glides rather than jumps
   const lean = { x: 0, y: 0 };
   const start = performance.now() - 40000;   // open mid-flow rather than on the field's seed
   const draw = (now) => {
+    pace(now);
     lean.x += (pointer.x - lean.x) * 0.04; lean.y += (pointer.y - lean.y) * 0.04;
     gl.uniform2f(uLean, lean.x, lean.y);
     gl.uniform1f(uTime, (now - start) / 1000);
