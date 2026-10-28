@@ -202,7 +202,7 @@ const flatDataset = (canvas, count) => {
   const flat = () => { const fresh = canvas.cloneNode(); canvas.replaceWith(fresh); flatDataset(fresh, count); };
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
   if (!gl) { flatDataset(canvas, count); return; }
-  const TOTAL = 2806605, PLAY_MS = 5600;
+  const TOTAL = 2806605, PLAY_MS = 5000;
   const SWEEP = 4, JITTER = 0.12;   // the scan front spans a quarter of the block; dots leave it a little out of step
   const vertex = `#version 300 es
 precision highp float;
@@ -264,15 +264,16 @@ void main() { color = tint; }`;
     // dots overlap less on a bigger canvas, so each carries a little more ink there
     gl.uniform1f(uInk, Math.min(0.4, Math.max(0.03, 0.12 * canvas.clientWidth * canvas.clientHeight / 484000)));
   };
-  // the count follows the dots past the middle of their move
-  const placed = (settle) => Math.round(TOTAL * Math.min(1, Math.max(0, (settle * (1 + SWEEP + JITTER) - 0.5 - JITTER / 2) / SWEEP)));
+  // the count follows the dots a quarter of the way through their move, so it starts with the scan
+  const placed = (settle) => Math.round(TOTAL * Math.min(1, Math.max(0, (settle * (1 + SWEEP + JITTER) - 0.25 - JITTER / 2) / SWEEP)));
   const inView = () => { const r = canvas.getBoundingClientRect(); return Math.min(1, Math.max(0, (innerHeight - r.top) / (innerHeight + r.height))); };
   const lean = { x: 0, y: 0 };
-  let begun = 0, shown = -1;
+  let armed = false, begun = 0, shown = -1;
   const draw = (now) => {
     lean.x += (pointer.x - lean.x) * 0.05; lean.y += (pointer.y - lean.y) * 0.05;
+    if (armed && !begun) begun = now;   // timed from the first frame actually drawn, so no step is skipped
     const t = calm ? 1 : begun ? Math.min(1, (now - begun) / PLAY_MS) : 0;
-    const settle = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(2 - 2 * t, 3) / 2;
+    const settle = 1 - (1 - t) * (1 - t);   // under way at once, easing into place at the end
     const secs = calm ? 0 : now / 1000, v = calm ? 0.5 : inView();
     gl.uniform1f(uSettle, settle);
     gl.uniform1f(uTime, secs);
@@ -287,11 +288,14 @@ void main() { color = tint; }`;
   size();
   addEventListener('resize', () => { size(); if (calm) draw(performance.now()); });
   if (calm) { draw(performance.now()); return; }
+  // draw once now so the GPU has the shader ready before the block scrolls in, and start the count from zero
+  draw(performance.now());
+  if (count) count.textContent = '0';
   const io = new IntersectionObserver(([entry]) => {
     if (!entry.isIntersecting) return;
     io.disconnect();
-    begun = performance.now();
-  }, { threshold: 0.35 });
+    armed = true;
+  }, { threshold: 0.2 });
   io.observe(canvas);
   whileVisible(canvas, draw);
 })();
