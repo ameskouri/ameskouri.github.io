@@ -130,7 +130,8 @@ p { text-wrap: pretty; }
 .dataset-label { position: absolute; display: none; font-size: var(--step-small); line-height: 1.2; color: var(--muted); white-space: nowrap; transform: translate(-50%, -50%) rotate(var(--turn, 0deg)); }
 .dataset-label-side { width: min-content; white-space: normal; transform: translate(0, -50%); }   /* starts just right of its line */
 .dataset-wrap.is-drawn .dataset-label { display: block; }
-.dataset-fig figcaption { max-width: 640px; margin-top: 8px; padding-right: 6%; text-align: center; }   /* centred on the block, which sits at 47% of the figure */
+.dataset-fig figcaption { max-width: 640px; margin-top: 40px; padding-right: 6%; text-align: center; }   /* centred on the block, which sits at 47% of the figure */
+@media (max-width: 599px) { .dataset-fig figcaption { margin-top: 72px; } }   /* clear of the edge labels on a phone */
 .dataset-total { display: block; font-family: var(--font-display); font-size: var(--step-head); font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .dataset-note { display: block; margin-top: 10px; font-size: var(--step-small); color: var(--muted); }
 
@@ -181,6 +182,13 @@ p { text-wrap: pretty; }
 @media (hover: hover) and (pointer: fine) {
   .social:hover .social-icon { background-color: var(--accent); color: var(--accent-ink); }
 }
+
+/* ---------- in the news: the headline, then the outlet and date ---------- */
+.news li + li { margin-top: 30px; }
+.news-link { display: inline-block; max-width: 30em; font-size: var(--step-lead); line-height: 1.3; text-decoration: underline; text-underline-offset: 0.2em; text-decoration-thickness: 0.06em; transition: color var(--t-hover) ease; }
+.news-meta { max-width: 40em; margin-top: 6px; font-size: var(--step-small); color: var(--muted); }
+.news-meta a { color: inherit; }
+@media (hover: hover) and (pointer: fine) { .news-link:hover, .news-meta a:hover { color: var(--accent); } }
 
 /* ---------- two-ended rows: contact ---------- */
 .pairs { margin-top: 12px; max-width: var(--col-max); }
